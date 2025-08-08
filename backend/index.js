@@ -33,6 +33,10 @@ User wants to say: ${userPrompt}
 Tone: ${tone}
 Output style: ${style}
 
+Format requirements:
+- If EMAIL → include greeting, body, and closing/signature.
+- If CHAT → write as a short message without greeting or signature unless specified.
+
 Return only the message, no extra explanation.
 If style is "sentence by sentence", put each sentence on a new line.
 `;
