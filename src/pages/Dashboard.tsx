@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
@@ -22,6 +23,9 @@ const Dashboard = () => {
   const [tone, setTone] = useState<string>('');
   const [outputFormat, setOutputFormat] = useState<string>('');
   const [generatedMessage, setGeneratedMessage] = useState<string>('');
+  const [isGenerating, setIsGenerating] = useState<boolean>(false);
+  
+  const { toast } = useToast();
   
   // Chat history state
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -58,6 +62,88 @@ const Dashboard = () => {
     const selectedChat = chats.find(chat => chat.id === chatId);
     if (selectedChat) {
       setGeneratedMessage(`Previous conversation: "${selectedChat.lastMessage}"`);
+    }
+  };
+
+  const generateMessage = async () => {
+    // Validation
+    if (!messageType) {
+      toast({
+        title: "Error",
+        description: "Please select a message type",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!userInput.trim()) {
+      toast({
+        title: "Error", 
+        description: "Please enter what you want to write",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!tone) {
+      toast({
+        title: "Error",
+        description: "Please select a tone",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (messageType === 'chat' && !outputFormat) {
+      toast({
+        title: "Error",
+        description: "Please select an output format for chat messages",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsGenerating(true);
+    setGeneratedMessage('');
+
+    try {
+      const requestBody = {
+        messageType,
+        isReply: messageMode === 'reply',
+        originalMessage: messageMode === 'reply' ? originalMessage : '',
+        userPrompt: userInput,
+        tone,
+        style: messageType === 'chat' ? (outputFormat === 'sentence' ? 'sentence by sentence' : 'single') : 'single'
+      };
+
+      const response = await fetch('http://localhost:3001/generate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setGeneratedMessage(data.message || 'No message received');
+      
+      toast({
+        title: "Success",
+        description: "Message generated successfully!",
+      });
+    } catch (error) {
+      console.error('Error generating message:', error);
+      toast({
+        title: "Error",
+        description: "Failed to generate message. Please check if the backend is running.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsGenerating(false);
     }
   };
 
@@ -208,9 +294,10 @@ const Dashboard = () => {
           {/* Generate Message Button */}
           <Button 
             className="w-full hover:opacity-90 transition-opacity"
-            onClick={() => setGeneratedMessage('Sample generated message...')}
+            onClick={generateMessage}
+            disabled={isGenerating}
           >
-            Generate Message
+            {isGenerating ? 'Generating...' : 'Generate Message'}
           </Button>
 
           {/* Output Box */}
@@ -232,9 +319,10 @@ const Dashboard = () => {
               <Button 
                 variant="outline" 
                 className="flex-1 hover:bg-gray-50 transition-colors"
-                onClick={() => setGeneratedMessage('Regenerated message...')}
+                onClick={generateMessage}
+                disabled={isGenerating}
               >
-                Regenerate
+                {isGenerating ? 'Regenerating...' : 'Regenerate'}
               </Button>
             </div>
           </div>
