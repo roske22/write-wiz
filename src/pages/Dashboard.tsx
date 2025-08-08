@@ -6,7 +6,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Search, Plus } from 'lucide-react';
+import { Search, Plus, Crown, AlertCircle } from 'lucide-react';
+import { useMessageLimits } from '@/hooks/useMessageLimits';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   Select,
   SelectContent,
@@ -26,6 +28,15 @@ const Dashboard = () => {
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   
   const { toast } = useToast();
+  const { 
+    messagesUsed, 
+    messagesRemaining, 
+    isLimitReached, 
+    canSendMessage, 
+    incrementUsage, 
+    isPremium,
+    isLoading: isLimitLoading 
+  } = useMessageLimits();
   
   // Chat history state
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -66,6 +77,16 @@ const Dashboard = () => {
   };
 
   const generateMessage = async () => {
+    // Check message limits first
+    if (!canSendMessage) {
+      toast({
+        title: "Daily Limit Reached",
+        description: "You've reached your daily message limit. Upgrade to premium for unlimited messages.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     // Validation
     if (!messageType) {
       toast({
@@ -130,6 +151,12 @@ const Dashboard = () => {
 
       const data = await response.json();
       setGeneratedMessage(data.message || 'No message received');
+      
+      // Increment usage count for free users
+      const usageUpdated = await incrementUsage();
+      if (!usageUpdated) {
+        console.warn('Failed to update usage count');
+      }
       
       toast({
         title: "Success",
@@ -203,6 +230,55 @@ const Dashboard = () => {
       {/* Main Content Area */}
       <div className="flex-1">
         <div className="max-w-2xl mx-auto p-8 space-y-6">
+          {/* Usage Limit Status */}
+          {!isLimitLoading && (
+            <div className="bg-card border rounded-lg p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  {isPremium ? (
+                    <>
+                      <Crown className="h-5 w-5 text-yellow-500" />
+                      <span className="font-medium text-foreground">Premium Account</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="font-medium text-foreground">Free Account</span>
+                    </>
+                  )}
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  {isPremium ? (
+                    "Unlimited messages"
+                  ) : (
+                    `${messagesUsed}/3 messages used today`
+                  )}
+                </div>
+              </div>
+              
+              {!isPremium && (
+                <div className="mt-3">
+                  <div className="w-full bg-secondary rounded-full h-2">
+                    <div 
+                      className="bg-primary h-2 rounded-full transition-all duration-300"
+                      style={{ width: `${(messagesUsed / 3) * 100}%` }}
+                    />
+                  </div>
+                  <div className="mt-2 text-sm text-muted-foreground">
+                    {messagesRemaining} messages remaining today
+                  </div>
+                </div>
+              )}
+              
+              {isLimitReached && (
+                <Alert className="mt-3">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    You've reached your daily limit. Upgrade to premium for unlimited messages.
+                  </AlertDescription>
+                </Alert>
+              )}
+            </div>
+          )}
           {/* Message Type Dropdown */}
           <div className="space-y-2">
             <Label htmlFor="message-type" className="text-black">Message Type</Label>
@@ -295,9 +371,9 @@ const Dashboard = () => {
           <Button 
             className="w-full hover:opacity-90 transition-opacity"
             onClick={generateMessage}
-            disabled={isGenerating}
+            disabled={isGenerating || !canSendMessage}
           >
-            {isGenerating ? 'Generating...' : 'Generate Message'}
+            {isGenerating ? 'Generating...' : !canSendMessage ? 'Daily Limit Reached' : 'Generate Message'}
           </Button>
 
           {/* Output Box */}
